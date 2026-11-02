@@ -5080,6 +5080,30 @@ def test_delay_in_comprehension_rejected(rhs):
         _comprehension_value("y[3]", rhs)
 
 
+def test_subscripted_expression():
+    """Subscripts of array comprehensions, array literals and array expressions compile."""
+    txt = """
+        model Subscripted
+          parameter Real a = 2;
+          parameter Real x = ({a * i for i in 1:3})[2];
+          parameter Real y = ({1, 2, 3})[3];
+          parameter Real z = (0.5 * {a * i for i in 1:3})[1];
+          Real w;
+        equation
+          w = ({a * i for i in 1:3})[3];
+        end Subscripted;
+    """
+    casadi_model = gen_casadi.generate(parser.parse(txt), "Subscripted")
+    parameters = {p.symbol.name(): p for p in casadi_model.parameters}
+    a = parameters["a"].symbol
+    F = ca.Function("f", [a], [parameters[n].value for n in ("x", "y", "z")])
+    assert [float(v) for v in F(2.0)] == [4.0, 3.0, 1.0]
+
+    w = next(v.symbol for v in casadi_model.alg_states if v.symbol.name() == "w")
+    residual = ca.Function("r", [w, a], [casadi_model.equations[0]])
+    assert float(residual(6.0, 2.0)) == 0.0
+
+
 if __name__ == "__main__":
     import pytest as _pytest
 
