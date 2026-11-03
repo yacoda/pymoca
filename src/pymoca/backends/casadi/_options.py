@@ -7,6 +7,7 @@ def _get_default_options():
 
     """
     return {
+        "basemodelica": False,
         "library_folders": [],
         "modelicapath": [],
         "verbose": False,

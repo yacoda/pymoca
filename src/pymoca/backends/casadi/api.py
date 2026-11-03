@@ -5,6 +5,7 @@ import logging
 import os
 import pickle
 import uuid
+from collections import OrderedDict
 from enum import IntEnum
 from typing import Dict, Optional
 
@@ -13,11 +14,14 @@ import casadi as ca
 import numpy as np
 
 from pymoca import __version__
+from pymoca.tree import TreeListener, TreeWalker
 
 from . import generator
 from ._options import _merge_default_options
 from .alias_relation import AliasRelation
 from .model import CASADI_ATTRIBUTES, DelayArgument, Model, Variable
+
+BASEMODELICA_EXTENSION = ".bmo"
 
 logger = logging.getLogger("pymoca")
 
@@ -106,6 +110,9 @@ def _compile_model(model_folder: str, model_name: str, compiler_options: Dict[st
     # compiling.
     from pymoca import parser
 
+    if compiler_options["basemodelica"]:
+        return _compile_basemodelica_model(model_folder, model_name, compiler_options)
+
     # Build the MODELICAPATH roots tree first and then extend parsed files
     # into that tree so top-level names shadow the ones from MODELICAPATH.
     tree = parser.modelicapath_to_tree(compiler_options["modelicapath"], use_env=True)
@@ -123,6 +130,66 @@ def _compile_model(model_folder: str, model_name: str, compiler_options: Dict[st
                         logger.warning("Skipping %s: %s", item, exc)
                         continue
                     tree.extend(parsed)
+
+    return generate_model(tree, model_name, compiler_options)
+
+
+class _DownquoteListener(TreeListener):
+    """Strip the quotes of quoted identifiers in class, symbol and component names"""
+
+    @staticmethod
+    def _downquote(name):
+        if isinstance(name, str) and len(name) >= 2 and name[0] == "'" and name[-1] == "'":
+            return name[1:-1]
+        return name
+
+    def enterClass(self, tree):
+        tree.name = self._downquote(tree.name)
+
+    def exitClass(self, tree):
+        tree.classes = OrderedDict((self._downquote(k), v) for k, v in tree.classes.items())
+        tree.symbols = OrderedDict((self._downquote(k), v) for k, v in tree.symbols.items())
+
+    enterTree = enterClass
+    exitTree = exitClass
+
+    def enterSymbol(self, tree):
+        tree.name = self._downquote(tree.name)
+
+    def enterComponentRef(self, tree):
+        tree.name = self._downquote(tree.name)
+
+    def enterForIndex(self, tree):
+        tree.name = self._downquote(tree.name)
+
+
+def _compile_basemodelica_model(model_folder: str, model_name: str, compiler_options):
+    """Compile the Base Modelica files of a model folder
+
+    Quoted identifiers are mapped to plain names, so 'x.y[1]' becomes the variable x.y[1]. A
+    model wrapped in a package of the same name, as Base Modelica writes it, is descended into.
+    """
+    from pymoca import parser
+
+    tree = None
+    for item in sorted(fnmatch.filter(os.listdir(model_folder), "*" + BASEMODELICA_EXTENSION)):
+        logger.info("Parsing {}".format(item))
+        with open(os.path.join(model_folder, item), "r", encoding="utf-8") as f:
+            parsed = parser.parse(f.read())
+        if tree is None:
+            tree = parsed
+        else:
+            tree.extend(parsed)
+    if tree is None:
+        raise FileNotFoundError(
+            "No *{} files found in {}".format(BASEMODELICA_EXTENSION, model_folder)
+        )
+
+    TreeWalker().walk(_DownquoteListener(), tree)
+
+    package = tree.classes.get(model_name)
+    if package is not None and package.type == "package" and model_name in package.classes:
+        model_name = model_name + "." + model_name
 
     return generate_model(tree, model_name, compiler_options)
 
