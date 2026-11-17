@@ -1111,6 +1111,21 @@ def test_split_name_keeps_quoted_identifiers(name, parts):
     assert ast.ComponentRef.from_string(name).to_tuple() == tuple(parts)
 
 
+@pytest.mark.parametrize(
+    "name, plain",
+    [
+        ("x", "x"),
+        ("'x'", "x"),
+        ("c.'a.b'[1]", "c.a.b[1]"),
+        ("'c 1'.'a.b'", "c 1.a.b"),
+        (r"'\' \" \? \\ \a \b \f \n \r \t \v'", "' \" ? \\ \a \b \f \n \r \t \v"),
+    ],
+)
+def test_unquote_name(name, plain):
+    """Each quoted part of a flat name maps to its content, escapes resolved (MLS 2.4.4)."""
+    assert tree.unquote_name(name) == plain
+
+
 if __name__ == "__main__":
     import pytest as _pytest
 
