@@ -1142,7 +1142,7 @@ class Generator(TreeListener):
                 symbol_name = (
                     s.name()
                     if len(tree.indices) == 1
-                    else s.name().split(".")[i] + " in nested symbol " + s.name()
+                    else ast.split_name(s.name())[i] + " in nested symbol " + s.name()
                 )
                 raise ValueError(
                     "Too many indices found for symbol {}, check if the symbol has "
@@ -1171,7 +1171,7 @@ class Generator(TreeListener):
                         symbol_name = (
                             s.name()
                             if len(tree.indices) == 1
-                            else s.name().split(".")[i] + " in nested symbol " + s.name()
+                            else ast.split_name(s.name())[i] + " in nested symbol " + s.name()
                         )
                         raise ValueError(
                             "Symbol {} was given an index of {} but this symbol "
@@ -1183,7 +1183,7 @@ class Generator(TreeListener):
                             symbol_name = (
                                 s.name()
                                 if len(tree.indices) == 1
-                                else s.name().split(".")[i] + " in nested symbol " + s.name()
+                                else ast.split_name(s.name())[i] + " in nested symbol " + s.name()
                             )
                             raise ValueError(
                                 "Index {} of symbol {} is out of bounds. "
